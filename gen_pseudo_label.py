@@ -182,14 +182,17 @@ def generator(target_y, q_params, thresh, grid_size):
 
 # Pseudo-label generation using housing-price prediction dataset
 if __name__ == "__main__":
-    # ratio for uncertainty threshold
+    # Uncertainty ratio: eta of source uncertainty are less than the uncertainty threshold 
     eta = 0.9
-    # A list of tuple (uncertainty, prediction, ground truth)
+    # Information from source data, which is for building label density map of target scenario 
+    # A list of tuple: [(uncertainty, prediction, ground truth)]
     source_y = []
-    # A list of tuple (uncertainty, prediction, sample_id)
+    # Information from target data
+    # A list of tuple: [(uncertainty, prediction, sample_id)]
     target_y = []
 
-    max_uncertainty = 0.2  # Need to be decided after taking a glance of the distribution of uncertainty
-    grid_size = 1.0  # Small values can indeed slow down calculations, and large values can lead to insufficient precision
+    max_uncertainty = 0.2  # The largest uncertainty that the task considers
+    grid_size = 1.0  # Grid size of label density map, which is a task-dependent parameter
     q_params, u_thresh = gen_q_func(source_y, max_uncertainty, eta=eta)
+    # Pseudo label for target data
     pseudo_y = generator(target_y, q_params, u_thresh, grid_size)
