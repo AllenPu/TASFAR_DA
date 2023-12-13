@@ -179,6 +179,8 @@ def generator(target_y, q_params, thresh, grid_size):
     pseudo_y = pseudo_label_gen(den_map, est_map, minimum, num_block, grid_size, set_u)
     return pseudo_y
 
+def eval():
+    pass
 
 # Pseudo-label generation using housing-price prediction dataset
 if __name__ == "__main__":
@@ -190,9 +192,14 @@ if __name__ == "__main__":
     # Information from target data
     # A list of tuple: [(uncertainty, prediction, sample_id)]
     target_y = []
+    # For evaluation
+    target_label = []
 
     max_uncertainty = 0.2  # The largest uncertainty that the task considers
     grid_size = 1.0  # Grid size of label density map, which is a task-dependent parameter
     q_params, u_thresh = gen_q_func(source_y, max_uncertainty, eta=eta)
     # Pseudo label for target data
     pseudo_y = generator(target_y, q_params, u_thresh, grid_size)
+
+    if target_label:
+        eval(target_y, pseudo_y, target_label)
