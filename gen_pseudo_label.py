@@ -180,6 +180,8 @@ def generator(target_y, q_params, thresh, grid_size):
     return pseudo_y
 
 def eval():
+    print("Prediction accuracy: ")
+    print("Pseudo-label accuracy: ")
     pass
 
 # Pseudo-label generation using housing-price prediction dataset
