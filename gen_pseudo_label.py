@@ -2,10 +2,11 @@ import numpy as np
 import statsmodels.api as sm
 import math
 from scipy.stats import norm
+import json
 
 
 # Return uncertainty threshold, q parameter
-def gen_q_func(source_y, max_uncertainty, eta=0.9):
+def gen_q_func(source_y, max_uncertainty, eta=0.85):
     """
     Generate Q function. This function should be customized, but here is an example of generating a Q function based on
         quantile regression model
@@ -48,18 +49,18 @@ def con_classifier(target_y, thresh):
     """
     Split target data into confidence data and uncertain data
     Args:
-        target_y: A list of tuple (uncertainty, prediction, sample_id)
+        target_y: A dictionary of elements {sample_id: (uncertainty, prediction)}
         thresh: Uncertainty threshold used to split target data into confidence data and uncertain data
     Returns:
         Set of confidence data, set of uncertain data
     """
     set_c = []
     set_u = []
-    for t in target_y:
-        if t[0] < thresh:
-            set_c.append(t)
+    for k in target_y.keys():
+        if target_y[k][0] < thresh:
+            set_c.append(target_y[k])
         else:
-            set_u.append(t)
+            set_u.append(target_y[k] + [k])
     return set_c, set_u
 
 
@@ -70,8 +71,8 @@ def cal_den(et_count, std, minimum, num, size):
         et_count: estimation
         std: standard deviation
         minimum: minimum value of the density map
-        num: number of block in the density map
-        size: block size of the density map
+        num: number of grids in the density map
+        size: grid size of the density map
     Returns:
         A list of (slot, density)
     """
@@ -79,7 +80,7 @@ def cal_den(et_count, std, minimum, num, size):
         return norm.cdf((x - mean) / std)
     den_list = []  # to be returned
     sigma_range = [et_count-3*std, et_count+3*std]  # the range [mean-3*sigma, mean+3*sigma] of the point
-    partitions = minimum + np.arange(0, num) * size  # left side of the block in the density map
+    partitions = minimum + np.arange(0, num) * size  # left side of the grid in the density map
     # partitions in the range
     pos = np.where((partitions >= sigma_range[0]) & (partitions < sigma_range[1]))[0]
     values = partitions[pos]
@@ -109,9 +110,9 @@ def density_map_construct(set_c, q_params, grid_size):
         grid_size: side length of the grid in the density map
     Returns:
         den_map: density map
-        est_map: estimation map, i.e., the corresponding value in each block
+        est_map: estimation map, i.e., the corresponding value in each grid
         minimum: minimum value of the density map
-        num_block: number of block in the density map
+        num_grid: number of grids in the density map
     """
     mean_std_list = []  # A list of tuple (mean, std) used to construct density map
     for t in set_c:
@@ -122,30 +123,31 @@ def density_map_construct(set_c, q_params, grid_size):
     max_data = mean_std_list[:, 0] + 3 * mean_std_list[:, 1]
     minimum = np.min(min_data)
     maximum = np.max(max_data)
-    num_block = math.ceil((maximum - minimum) / grid_size)
+    num_grid = math.ceil((maximum - minimum) / grid_size)
 
     # Generate density map
-    den_map = np.zeros(num_block)
+    den_map = np.zeros(num_grid)
     for data in mean_std_list:
-        den_list = cal_den(data[0], data[1], minimum, num_block, grid_size)
+        den_list = cal_den(data[0], data[1], minimum, num_grid, grid_size)
         for d in den_list:
             den_map[d[0]] += d[1]
     den_map /= np.sum(den_map)
-    return den_map, minimum + grid_size / 2 + np.arange(0, num_block) * grid_size, minimum, num_block
+    return den_map, minimum + grid_size / 2 + np.arange(0, num_grid) * grid_size, minimum, num_grid
 
 
-def pseudo_label_gen(den_map, est_map, minimum, num_block, grid_size, set_u):
+def pseudo_label_gen(den_map, est_map, minimum, num_grid, grid_size, set_u):
     """
     Generate pseudo label
     Args:
         den_map: density map generated from confidence data
         est_map: estimation map generated from confidence data
         minimum: minimum value of the side of density map
-        num_block: number of grids in the density map
+        num_grid: number of grids in the density map
         grid_size: side length of the grid in the density map
         set_u: set of uncertain data
     Returns:
         Pseudo labels: a dictionary of elements {sample_id: (pseudo_label, variance, local mean density)}
+        global mean density
     """
     mean_std_list = []  # A list of tuple (mean, std, sample_id, variance) used to calculate pseudo labels
     for t in set_u:
@@ -154,54 +156,70 @@ def pseudo_label_gen(den_map, est_map, minimum, num_block, grid_size, set_u):
     # Generate pseudo label
     pseudo_label_dict = {}
     for mean_std in mean_std_list:
-        den_list = cal_den(mean_std[0], mean_std[1], minimum, num_block, grid_size)
+        den_list = cal_den(mean_std[0], mean_std[1], minimum, num_grid, grid_size)
         pseudo_list = []  # To be used for interpolation
         for d in den_list:
             pseudo_list.append((est_map[d[0]], den_map[d[0]] * d[1], den_map[d[0]]))
         pseudo_array = np.array(pseudo_list)
         pseudo_label = np.average(pseudo_array[:, 0], weights=pseudo_array[:, 1]).item()
         pseudo_label_dict[mean_std[2]] = (pseudo_label, mean_std[3], np.mean(pseudo_array[:, 2]).item())
-    return pseudo_label_dict
+    return pseudo_label_dict, 1/den_map.shape[0]
 
 
 def generator(target_y, q_params, thresh, grid_size):
     """
     Args:
-        target_y: A list of tuple (uncertainty, prediction, sample_id)
+        target_y: A dictionary of elements {sample_id: (uncertainty, prediction)}
         q_params: parameters for Q function
         thresh: Uncertainty threshold used to split target data into confidence data and uncertain data
         grid_size: side length of the grid in the density map
     Returns:
         Pseudo labels: a dictionary of elements {sample_id: (pseudo_label, variance, local mean density)}
+        global mean density
     """
     set_c, set_u = con_classifier(target_y, thresh)
-    den_map, est_map, minimum, num_block = density_map_construct(set_c, q_params)
-    pseudo_y = pseudo_label_gen(den_map, est_map, minimum, num_block, grid_size, set_u)
-    return pseudo_y
+    den_map, est_map, minimum, num_grid = density_map_construct(set_c, q_params, grid_size)
+    pseudo_y, gmd = pseudo_label_gen(den_map, est_map, minimum, num_grid, grid_size, set_u)
+    return pseudo_y, gmd
 
-def eval():
-    print("Prediction accuracy: ")
-    print("Pseudo-label accuracy: ")
-    pass
+def eval(target_y, pseudo_y, target_label):
+    """
+    Evaluate the pseudo labels
+    """
+    sse_origin = 0
+    sse_pseudo = 0
+    count = 0
+    for k in target_y.keys():
+        count += 1
+        if k in pseudo_y.keys():
+            sse_origin += (target_y[k][1] - target_label[k]) ** 2
+            sse_pseudo += (pseudo_y[k][0] - target_label[k]) ** 2
+        else:
+            sse_origin += (target_y[k][1] - target_label[k]) ** 2
+            sse_pseudo += (target_y[k][1] - target_label[k]) ** 2
+    print("Prediction accuracy: %.3f" % (sse_origin/count))
+    print("Pseudo-label accuracy: %.3f" % (sse_pseudo/count))
+
 
 # Pseudo-label generation using housing-price prediction dataset
 if __name__ == "__main__":
     # Uncertainty ratio: eta of source uncertainty are less than the uncertainty threshold 
-    eta = 0.9
-    # Information from source data, which is for building label density map of target scenario 
-    # A list of tuple: [(uncertainty, prediction, ground truth)]
-    source_y = []
+    eta = 0.85
+    # Information from source data, which is for building label density map of target scenario
+    with open('./data/source_y.json', 'r') as fp:
+        source_y = json.load(fp)  # A list of tuple: [(uncertainty, prediction, ground truth)]
     # Information from target data
-    # A list of tuple: [(uncertainty, prediction, sample_id)]
-    target_y = []
+    with open('./data/target_y.json', 'r') as fp:
+        target_y = json.load(fp)  # A dictionary of elements {sample_id: (uncertainty, prediction)}
     # For evaluation
-    target_label = []
+    with open('./data/target_label.json', 'r') as fp:
+        target_label = json.load(fp)  # A dictionary of elements {sample_id: label}
 
     max_uncertainty = 0.2  # The largest uncertainty that the task considers
     grid_size = 1.0  # Grid size of label density map, which is a task-dependent parameter
     q_params, u_thresh = gen_q_func(source_y, max_uncertainty, eta=eta)
     # Pseudo label for target data
-    pseudo_y = generator(target_y, q_params, u_thresh, grid_size)
+    pseudo_y, gmd = generator(target_y, q_params, u_thresh, grid_size)
 
     if target_label:
         eval(target_y, pseudo_y, target_label)
