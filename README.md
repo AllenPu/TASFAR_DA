@@ -10,3 +10,9 @@ pip install statsmodels
 python gen_pseudo_label.py
 ```
 Evaluation
+```
+------------------------------------------------------------
+Prediction accuracy: 0.242
+Pseudo-label accuracy: 0.207
+------------------------------------------------------------
+```
