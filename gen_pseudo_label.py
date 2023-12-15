@@ -58,7 +58,7 @@ def con_classifier(target_y, thresh):
     set_u = []
     for k in target_y.keys():
         if target_y[k][0] < thresh:
-            set_c.append(target_y[k])
+            set_c.append(target_y[k] + [k])
         else:
             set_u.append(target_y[k] + [k])
     return set_c, set_u
@@ -166,6 +166,22 @@ def pseudo_label_gen(den_map, est_map, minimum, num_grid, grid_size, set_u):
     return pseudo_label_dict, 1/den_map.shape[0]
 
 
+def combine_pseudo(set_c, pseudo_y, gmd):
+    """
+    Combine the pseudo labels for unconfidence data with confidence data for training
+    Args:
+        set_c: set of confidence data
+        pseudo_y: a dictionary of elements {sample_id: (pseudo_label, variance, local mean density)}
+        gmd: global mean density
+    Returns:
+        pseudo_y_all: a dictionary of elements {sample_id: (pseudo_label, variance, local mean density)}
+    """
+    pseudo_y_all = pseudo_y
+    for t in set_c:
+        pseudo_y_all[t[2]] = (t[1], t[0], gmd)
+    return pseudo_y_all
+
+
 def generator(target_y, q_params, thresh, grid_size):
     """
     Args:
@@ -174,15 +190,16 @@ def generator(target_y, q_params, thresh, grid_size):
         thresh: Uncertainty threshold used to split target data into confidence data and uncertain data
         grid_size: side length of the grid in the density map
     Returns:
-        Pseudo labels: a dictionary of elements {sample_id: (pseudo_label, variance, local mean density)}
+        Pseudo_y_all: a dictionary of elements {sample_id: (pseudo_label, variance, local mean density)}
         global mean density
     """
     set_c, set_u = con_classifier(target_y, thresh)
     den_map, est_map, minimum, num_grid = density_map_construct(set_c, q_params, grid_size)
     pseudo_y, gmd = pseudo_label_gen(den_map, est_map, minimum, num_grid, grid_size, set_u)
-    return pseudo_y, gmd
+    pseudo_y_all = combine_pseudo(set_c, pseudo_y, gmd)
+    return pseudo_y_all, gmd
 
-def eval(target_y, pseudo_y, target_label):
+def eval(target_y, pseudo_label, target_label):
     """
     Evaluate the pseudo labels
     """
@@ -191,14 +208,10 @@ def eval(target_y, pseudo_y, target_label):
     count = 0
     for k in target_y.keys():
         count += 1
-        if k in pseudo_y.keys():
-            sse_origin += (target_y[k][1] - target_label[k]) ** 2
-            sse_pseudo += (pseudo_y[k][0] - target_label[k]) ** 2
-        else:
-            sse_origin += (target_y[k][1] - target_label[k]) ** 2
-            sse_pseudo += (target_y[k][1] - target_label[k]) ** 2
-    print("Prediction error: %.3f" % (sse_origin/count))
-    print("Pseudo-label error: %.3f" % (sse_pseudo/count))
+        sse_origin += (target_y[k][1] - target_label[k]) ** 2
+        sse_pseudo += (pseudo_label[k][0] - target_label[k]) ** 2
+    print("Prediction error: %.4f" % (sse_origin/count))
+    print("Pseudo-label error: %.4f" % (sse_pseudo/count))
 
 
 # Pseudo-label generation using housing-price prediction dataset
@@ -218,8 +231,11 @@ if __name__ == "__main__":
     max_uncertainty = 0.2  # The largest uncertainty that the task considers
     grid_size = 1.0  # Grid size of label density map, which is a task-dependent parameter
     q_params, u_thresh = gen_q_func(source_y, max_uncertainty, eta=eta)
+    print('THRESHOLD is %s' % u_thresh)
     # Pseudo label for target data
-    pseudo_y, gmd = generator(target_y, q_params, u_thresh, grid_size)
+    pseudo_label, gmd = generator(target_y, q_params, u_thresh, grid_size)
+    with open('./data/pseudo_label.json', 'w') as fp:
+        json.dump([pseudo_label, gmd], fp)
 
     if target_label:
-        eval(target_y, pseudo_y, target_label)
+        eval(target_y, pseudo_label, target_label)
