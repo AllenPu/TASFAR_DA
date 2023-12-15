@@ -29,6 +29,6 @@ Evaluation
 ```
 ------------------------------------------------------------
 Price MSE before adaptation: 0.2421
-Price MSE after adaptation: 0.1790
-MSE reduction rate: 26.06%
+Price MSE after adaptation: 0.1734
+MSE reduction rate: 28.38%
 ------------------------------------------------------------
