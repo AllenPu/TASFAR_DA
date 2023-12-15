@@ -197,8 +197,8 @@ def eval(target_y, pseudo_y, target_label):
         else:
             sse_origin += (target_y[k][1] - target_label[k]) ** 2
             sse_pseudo += (target_y[k][1] - target_label[k]) ** 2
-    print("Prediction accuracy: %.3f" % (sse_origin/count))
-    print("Pseudo-label accuracy: %.3f" % (sse_pseudo/count))
+    print("Prediction error: %.3f" % (sse_origin/count))
+    print("Pseudo-label error: %.3f" % (sse_pseudo/count))
 
 
 # Pseudo-label generation using housing-price prediction dataset

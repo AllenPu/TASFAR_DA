@@ -12,7 +12,7 @@ python gen_pseudo_label.py
 Evaluation
 ```
 ------------------------------------------------------------
-Prediction accuracy: 0.242
-Pseudo-label accuracy: 0.207
+Prediction error: 0.242
+Pseudo-label error: 0.207
 ------------------------------------------------------------
 ```
