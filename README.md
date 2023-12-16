@@ -21,7 +21,7 @@ Pseudo-label MSE: 0.2085
 ```
 ### Adaptation Training 
 ```
-python train.py # Training using pseudo labels
+python train.py # Training using pseudo labels, weighted by pseudo-label credibility
 python test.py
 ```
 Testing result
