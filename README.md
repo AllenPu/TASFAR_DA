@@ -8,7 +8,7 @@ The following example generates pseudo label for [housing-price prediction](http
 pip install scipy
 pip install statsmodels
 # Prepare data for pseudo-label generating
-python col_ys.py  # You can ignore this step as we have provided the data.
+python col_ys.py  # For housing-price prediction, data have been given in ./data/
 # Generate pseudo labels for target data
 python gen_pseudo_label.py
 ```
