@@ -2,7 +2,7 @@
 This repo implements the paper [Target-agnostic Source-free Domain Adaptation for Regression Tasks](https://arxiv.org/abs/2312.00540) which is accepted by ICDE 2024. 
 
 The following example generates pseudo label for [housing-price prediction](https://www.kaggle.com/datasets/camnugent/california-housing-prices)
-### Pseudo-label testing
+### Pseudo-label Generation
 ```
 # Environment setup
 pip install scipy
@@ -15,17 +15,16 @@ python gen_pseudo_label.py
 Evaluation
 ```
 ------------------------------------------------------------
-Prediction error: 0.2421
-Pseudo-label error: 0.2085
+Prediction MSE: 0.2421
+Pseudo-label MSE: 0.2085
 ------------------------------------------------------------
 ```
-### Training 
-Training will further improve the model performance because of the credibility of the pseudo-label.
+### Adaptation Training 
 ```
-python train.py
+python train.py # Training using pseudo labels
 python test.py
 ```
-Evaluation
+Testing result
 ```
 ------------------------------------------------------------
 Price MSE before adaptation: 0.2421
